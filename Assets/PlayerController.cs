@@ -14,15 +14,20 @@ public class PlayerController : MonoBehaviour
     [SerializeField]
     private ThirdPersonCharacter character;
 
+    public bool isAssigned = false;
+
     public GameObject _faction;
+
     private List<GameObject> _cosasEncontradas = new List<GameObject>();
     private List<Vector2> _positionsToMove = new List<Vector2>();
     private bool _isMoving = false;
     private bool _isSearching = false;
     private bool _isRepeating = false;
+    private GameObject _resourceToExploit = null;
 
     public event Action<GameObject> OnPersonFinishToMove;
     public event Action<List<GameObject>> OnPersonEnterFaction;
+    public event Action<GameObject> OnPersonFinishAssign;
     private void Start()
     {
         
@@ -30,12 +35,23 @@ public class PlayerController : MonoBehaviour
     void Update()
     {
         checkRemainingDistance();
-        if(_positionsToMove.Count > 0 && _isMoving)
+        if(_positionsToMove.Count > 0 && !_isMoving)
             RunPositionsToMove();
 
     }
 
-    //Return true when entity arrive at destination, retun false if is on the way
+
+    public void AddResourceToExploit(GameObject resource)
+    {
+        //Agregar el camino que tiene que hacer y dsp programar la logica de explotacion de recursos
+        _resourceToExploit = resource;
+        List<Vector2> posiciones = new List<Vector2>()
+        {
+            new Vector2(_faction.transform.position.x, _faction.transform.position.z),
+            new Vector2(_resourceToExploit.transform.position.x, _resourceToExploit.transform.position.z)
+        };
+        AddPositionsToMove(posiciones, true, false);
+    }
     public void MoveToPosition(Vector2 position)
     {
         _isMoving = true;
@@ -63,6 +79,13 @@ public class PlayerController : MonoBehaviour
             character.Move(Vector3.zero, false, false);
             _isMoving = false;
             OnPersonFinishToMove?.Invoke(gameObject);
+            if (_isSearching && _positionsToMove.Count == 0) 
+            {
+                //esto es un poco verga, porque no termina una asignacion termina de buscar, guarda con eso
+                //Aca se supone que termina de buscar, tal vez estaria bueno hacer un evento especial para esto, por ahora lo manda a la base
+                OnPersonFinishAssign?.Invoke(gameObject);
+                MoveToPosition(new Vector2(_faction.transform.position.x, _faction.transform.position.z));
+            }
         }
     }
     private void RunPositionsToMove()

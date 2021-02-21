@@ -8,23 +8,29 @@ public class Faction : MonoBehaviour
 {
     [SerializeField] private GameObject SpawnPoint;
     [SerializeField] private GameObject playerPrefab;
-    [SerializeField] private GameObject Faro;
 
     List<GameObject> People;
     
+    //Lo que pienso sobre etas listas es que tal vez se pueda hacer un lista de objetos y dentro de esos objetos tener alguna
+    //manera de decir si son know unknow o searching, lo mismo con las listas de recursos
     private List<Vector2> _knowPlaces = new List<Vector2>();
     private List<Vector2> _unknowPlaces = new List<Vector2>();
-    private List<GameObject> _resources = new List<GameObject>();
+    private List<Vector2> _searchingPlaces = new List<Vector2>();
+
+    private List<GameObject> _knowResources = new List<GameObject>();
+    private List<GameObject> _exploitedResources = new List<GameObject>();
 
     private void Awake()
     {
         People = new List<GameObject>();
-        for (int i = 0; i < 1; i++)
+        //Crea personas
+        for (int i = 0; i < 2; i++)
         {
             GameObject people = Instantiate(playerPrefab, SpawnPoint.transform.position, Quaternion.identity);
             people.GetComponent<PlayerController>()._faction = gameObject;
             People.Add(people);
         }
+        //Crea matriz de posiciones no descubiertas
         for (int x = -5; x < 5; x++)
         {
             for (int y = -5; y < 5; y++)
@@ -35,22 +41,72 @@ public class Faction : MonoBehaviour
     }
     private void Start()
     {
-        Search();
     }
 
     private void Update()
     {
+        //AI
+        if (People.Where(x => !x.GetComponent<PlayerController>().isAssigned).ToList().Count > 0)
+        {
+            if (_knowResources.Count > 0)
+            {
+                Debug.Log("Che tal vez es una buena idea ir a buscar esos recursos");
+                ExploitResource(GetPersonUnasigned(), GetClosestUnxploitedResource());
+            }
+            else if (_knowResources.Count == 0)
+            {
+                Search(GetPersonUnasigned(), GetClosestUnknowPlaces(10));
+                Debug.Log("Che tal vez es una buena explorar");
+            }
+        }
+        
     }
-
-    private void Search()
+    //MECANICAS
+    private void ExploitResource(PlayerController person, GameObject resource)
     {
-        //NECESITAMOS UNA MANERA DE CONFIRMAR CUANDO LLEGA A LA POSICION QUE LE MANDAS
-        var person = People.First();
-        var playerController = person.GetComponent<PlayerController>();
-        playerController.OnPersonEnterFaction += ReceiveNewResources;
-        //MoveToPosition(person,(Vector2)SearchClosestPosition());
-        playerController.AddPositionsToMove(_unknowPlaces, false, true);
+        person.OnPersonEnterFaction += ReceiveNewResourceDiscovered; //Aca deberia cambiar a otro metodo que reciva los recursos explotados
+        person.OnPersonFinishAssign += PersonFinishAssign;
+
+        _knowResources.Remove(resource);
+        _exploitedResources.Add(resource);
+
+        person.AddResourceToExploit(resource);
+        person.isAssigned = true;
     }
+    private void Search(PlayerController person, List<Vector2> positionsToMove)
+    {
+        //Tomo la primer persona que no este asignada a alguna tarea
+        //Esta linea se podria hacer en un metodo ya que podria ser llamada varias veces en el codigo
+        person.OnPersonEnterFaction += ReceiveNewResourceDiscovered;
+        person.OnPersonFinishAssign += PersonFinishAssign;
+
+        //cada posicion la saco de las que no se conocen y las pongo en las que se estan buscando
+        foreach (Vector2 position in positionsToMove)
+        {
+            _unknowPlaces.Remove(position);
+            _searchingPlaces.Add(position);
+        }
+        person.AddPositionsToMove(positionsToMove, false, true);
+        person.isAssigned = true;
+    }
+    //SERVICES
+    private PlayerController GetPersonUnasigned()
+    {
+        //Tomo la primer persona que no este asignada a alguna tarea
+        return People.Where(x => !x.GetComponent<PlayerController>().isAssigned).First().GetComponent<PlayerController>();
+    }
+    private GameObject GetClosestUnxploitedResource()
+    {
+        //Tomo el recurso mas cercano a la base
+        return _knowResources.OrderBy(x => Vector2.Distance(new Vector2(x.transform.position.x, x.transform.position.z), new Vector2(transform.position.x, transform.position.z))).First();
+    }
+    private List<Vector2> GetClosestUnknowPlaces(int cuantity)
+    {
+        //ordeno las posiciones no conocidas por distancia a la base, tomo la cantidad
+        return _unknowPlaces.OrderBy(x => Vector2.Distance(x, new Vector2(gameObject.transform.position.x, gameObject.transform.position.z))).Take(cuantity).ToList();
+    }
+    //
+    
     private Vector2 SearchClosestPosition()
     {
         Vector2 closestPosition = Vector2.one * 10;
@@ -74,17 +130,19 @@ public class Faction : MonoBehaviour
         var playerController = person.GetComponent<PlayerController>();
         playerController.MoveToPosition(position);
     }
-
-    private void ReceiveNewResources(List<GameObject> NewResources)
+    private void ReceiveNewResourceDiscovered(List<GameObject> NewResources)
     {
         foreach(GameObject resource in NewResources)
         {
-            Debug.Log("Traigo shit" + resource);
-            if (!_resources.Contains(resource))
+            if (!_knowResources.Contains(resource))
             {
-                _resources.Add(resource);
+                _knowResources.Add(resource);
             }
         }
+    }
+    private void PersonFinishAssign(GameObject Person)
+    {
+        Person.GetComponent<PlayerController>().isAssigned = false;
     }
 }
 

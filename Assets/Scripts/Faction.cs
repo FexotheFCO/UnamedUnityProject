@@ -20,6 +20,7 @@ public class Faction : MonoBehaviour
     private List<GameObject> _knowResources = new List<GameObject>();
     private List<GameObject> _exploitedResources = new List<GameObject>();
 
+    private int _inventario = 0;
     private void Awake()
     {
         People = new List<GameObject>();
@@ -27,7 +28,7 @@ public class Faction : MonoBehaviour
         for (int i = 0; i < 2; i++)
         {
             GameObject people = Instantiate(playerPrefab, SpawnPoint.transform.position, Quaternion.identity);
-            people.GetComponent<PlayerController>()._faction = gameObject;
+            people.GetComponent<PersonController>().faction = gameObject;
             People.Add(people);
         }
         //Crea matriz de posiciones no descubiertas
@@ -39,14 +40,11 @@ public class Faction : MonoBehaviour
             }
         }
     }
-    private void Start()
-    {
-    }
 
     private void Update()
     {
         //AI
-        if (People.Where(x => !x.GetComponent<PlayerController>().isAssigned).ToList().Count > 0)
+        if (People.Where(x => !x.GetComponent<PersonController>().isAssigned).ToList().Count > 0)
         {
             if (_knowResources.Count > 0)
             {
@@ -62,10 +60,11 @@ public class Faction : MonoBehaviour
         
     }
     //MECANICAS
-    private void ExploitResource(PlayerController person, GameObject resource)
+    private void ExploitResource(PersonController person, GameObject resource)
     {
         person.OnPersonEnterFaction += ReceiveNewResourceDiscovered; //Aca deberia cambiar a otro metodo que reciva los recursos explotados
         person.OnPersonFinishAssign += PersonFinishAssign;
+        person.OnPersonEnterFactionWhitResources += ReceiveResourcesExploited;
 
         _knowResources.Remove(resource);
         _exploitedResources.Add(resource);
@@ -73,7 +72,7 @@ public class Faction : MonoBehaviour
         person.AddResourceToExploit(resource);
         person.isAssigned = true;
     }
-    private void Search(PlayerController person, List<Vector2> positionsToMove)
+    private void Search(PersonController person, List<Vector2> positionsToMove)
     {
         //Tomo la primer persona que no este asignada a alguna tarea
         //Esta linea se podria hacer en un metodo ya que podria ser llamada varias veces en el codigo
@@ -90,10 +89,10 @@ public class Faction : MonoBehaviour
         person.isAssigned = true;
     }
     //SERVICES
-    private PlayerController GetPersonUnasigned()
+    private PersonController GetPersonUnasigned()
     {
         //Tomo la primer persona que no este asignada a alguna tarea
-        return People.Where(x => !x.GetComponent<PlayerController>().isAssigned).First().GetComponent<PlayerController>();
+        return People.Where(x => !x.GetComponent<PersonController>().isAssigned).First().GetComponent<PersonController>();
     }
     private GameObject GetClosestUnxploitedResource()
     {
@@ -105,7 +104,29 @@ public class Faction : MonoBehaviour
         //ordeno las posiciones no conocidas por distancia a la base, tomo la cantidad
         return _unknowPlaces.OrderBy(x => Vector2.Distance(x, new Vector2(gameObject.transform.position.x, gameObject.transform.position.z))).Take(cuantity).ToList();
     }
-    //
+    //EVENTOS
+    private void ReceiveNewResourceDiscovered(List<GameObject> NewResources)
+    {
+        foreach(GameObject resource in NewResources)
+        {
+            if (!_knowResources.Contains(resource))
+            {
+                _knowResources.Add(resource);
+            }
+        }
+    }
+    private void ReceiveResourcesExploited(PersonController person)
+    {
+        _inventario =+ person.cantidadDeRecursos;
+        person.cantidadDeRecursos = 0;
+    }
+    private void PersonFinishAssign(GameObject Person)
+    {
+        Person.GetComponent<PersonController>().isAssigned = false;
+    }
+}
+//UnusedShit!
+/* SearchClosestPosition
     
     private Vector2 SearchClosestPosition()
     {
@@ -117,63 +138,49 @@ public class Faction : MonoBehaviour
                 closestPosition = position;
         }
         return closestPosition;
-    }
+    }*/
+/* MoveToRandomPosition
     private void MoveToRandomPosition(GameObject person)
     {
         var playerController = person.GetComponent<PlayerController>();
         Vector3 randomPos = new Vector3(UnityEngine.Random.Range(-50, 50), 0, UnityEngine.Random.Range(-50, 50));
         Debug.Log(randomPos);
         playerController.MoveToPosition(randomPos);
-    }
+    }*/
+/* MoveToPosition
     private void MoveToPosition(GameObject person, Vector3 position)
     {
         var playerController = person.GetComponent<PlayerController>();
         playerController.MoveToPosition(position);
-    }
-    private void ReceiveNewResourceDiscovered(List<GameObject> NewResources)
-    {
-        foreach(GameObject resource in NewResources)
-        {
-            if (!_knowResources.Contains(resource))
-            {
-                _knowResources.Add(resource);
-            }
-        }
-    }
-    private void PersonFinishAssign(GameObject Person)
-    {
-        Person.GetComponent<PlayerController>().isAssigned = false;
-    }
-}
-
-    /*ROTAR ALGO
-        Faro.transform.Rotate(0, .5f, 0, Space.Self);
-        
-        RaycastHit hit;
-        Vector3 dir = Faro.transform.forward;
-        dir.y = Faro.transform.position.y;
-        dir.x *= 100;
-        dir.z *= 100;
-        Debug.DrawLine(Faro.transform.position, dir, Color.green);
-        */
-    /*
-     * TIRAR RAY CAST AL REDEDOR DE UN OBJETO, HACE UNAS COSAS FLASHERAS CON EL COSENO Y EL SENO MUY PIOLAS
-    int RaysToShoot = 30;
-    float angle = 0;
-    for (int i = 0; i < RaysToShoot; i++)
-    {
-        float x = Mathf.Sin(angle);
-        float y = Mathf.Cos(angle);
-        angle += 2 * Mathf.PI / RaysToShoot;
-
-        Vector3 dir = new Vector3(transform.position.x + x, 0, transform.position.z + y);
-        dir *= 1000f;
-        RaycastHit hit;
-        Debug.DrawLine(transform.position, dir, Color.red);
-        if (Physics.Raycast(transform.position, dir, out hit))
-        {
-            //here is how to do your cool stuff ;)
-        }
-
     }*/
+/*ROTAR ALGO
+    Faro.transform.Rotate(0, .5f, 0, Space.Self);
+
+    RaycastHit hit;
+    Vector3 dir = Faro.transform.forward;
+    dir.y = Faro.transform.position.y;
+    dir.x *= 100;
+    dir.z *= 100;
+    Debug.DrawLine(Faro.transform.position, dir, Color.green);
+    */
+/*
+ * TIRAR RAY CAST AL REDEDOR DE UN OBJETO, HACE UNAS COSAS FLASHERAS CON EL COSENO Y EL SENO MUY PIOLAS
+int RaysToShoot = 30;
+float angle = 0;
+for (int i = 0; i < RaysToShoot; i++)
+{
+    float x = Mathf.Sin(angle);
+    float y = Mathf.Cos(angle);
+    angle += 2 * Mathf.PI / RaysToShoot;
+
+    Vector3 dir = new Vector3(transform.position.x + x, 0, transform.position.z + y);
+    dir *= 1000f;
+    RaycastHit hit;
+    Debug.DrawLine(transform.position, dir, Color.red);
+    if (Physics.Raycast(transform.position, dir, out hit))
+    {
+        //here is how to do your cool stuff ;)
+    }
+
+}*/
 

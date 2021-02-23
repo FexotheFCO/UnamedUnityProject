@@ -6,48 +6,51 @@ using UnityEngine;
 using UnityEngine.AI;
 using UnityStandardAssets.Characters.ThirdPerson;
 
-public class PlayerController : MonoBehaviour
+public class PersonController : MonoBehaviour
 {
+
     // Start is called before the first frame update
     [SerializeField]
     private NavMeshAgent agent;
     [SerializeField]
     private ThirdPersonCharacter character;
-
+    [NonSerialized]
     public bool isAssigned = false;
+    [NonSerialized]
+    public GameObject faction;
+    
+    public int cantidadDeRecursos = 0;
 
-    public GameObject _faction;
 
     private List<GameObject> _cosasEncontradas = new List<GameObject>();
     private List<Vector2> _positionsToMove = new List<Vector2>();
+    private GameObject _resourceToExploit = null;
+
+    const int _limiteDeRecursos = 50;
     private bool _isMoving = false;
     private bool _isSearching = false;
     private bool _isRepeating = false;
-    private GameObject _resourceToExploit = null;
+    private bool _stop = false;
 
     public event Action<GameObject> OnPersonFinishToMove;
-    public event Action<List<GameObject>> OnPersonEnterFaction;
+    public event Action<List<GameObject>> OnPersonEnterFaction;//Aca en vez de pasarle una lista de objetos podriamos hacer una nueva clase con varias cosas para cuando llega, por ahora voy a seguir haciendo eventos
+    //Incluso podria pasarle directamente el personController y ahi ir fijandome
     public event Action<GameObject> OnPersonFinishAssign;
-    private void Start()
-    {
-        
-    }
+    public event Action<PersonController> OnPersonEnterFactionWhitResources;
     void Update()
     {
-        checkRemainingDistance();
-        if(_positionsToMove.Count > 0 && !_isMoving)
+        CheckRemainingDistance();
+        if(_positionsToMove.Count > 0 && !_isMoving && !_stop)
             RunPositionsToMove();
 
     }
-
-
     public void AddResourceToExploit(GameObject resource)
     {
         //Agregar el camino que tiene que hacer y dsp programar la logica de explotacion de recursos
         _resourceToExploit = resource;
         List<Vector2> posiciones = new List<Vector2>()
         {
-            new Vector2(_faction.transform.position.x, _faction.transform.position.z),
+            new Vector2(faction.transform.position.x, faction.transform.position.z),
             new Vector2(_resourceToExploit.transform.position.x, _resourceToExploit.transform.position.z)
         };
         AddPositionsToMove(posiciones, true, false);
@@ -68,7 +71,7 @@ public class PlayerController : MonoBehaviour
         }
     }
     //Esto no solo chekea la distancia si no que mueve al character en la direccion adecuada, tal vez hay que cambiar el nombre
-    private void checkRemainingDistance()
+    private void CheckRemainingDistance()
     {
         if (agent.remainingDistance > agent.stoppingDistance)
         {
@@ -84,7 +87,7 @@ public class PlayerController : MonoBehaviour
                 //esto es un poco verga, porque no termina una asignacion termina de buscar, guarda con eso
                 //Aca se supone que termina de buscar, tal vez estaria bueno hacer un evento especial para esto, por ahora lo manda a la base
                 OnPersonFinishAssign?.Invoke(gameObject);
-                MoveToPosition(new Vector2(_faction.transform.position.x, _faction.transform.position.z));
+                MoveToPosition(new Vector2(faction.transform.position.x, faction.transform.position.z));
             }
         }
     }
@@ -93,7 +96,7 @@ public class PlayerController : MonoBehaviour
         if (_isSearching)
         {
             //Al estar en modo BUSQUEDA calculo de las proximas posiciones cual es la mejor, dependiendo de que tan lejos esten de la base y de la persona
-            var positionFaction = new Vector2(_faction.transform.position.x, _faction.transform.position.z);
+            var positionFaction = new Vector2(faction.transform.position.x, faction.transform.position.z);
             var positionThis = new Vector2(transform.position.x, transform.position.z);
             //Aca se multiplica por 2 el calculo de la distancia respecto a la persona, ya que le quiero dar una prioridad a esa distancia
             _positionsToMove = _positionsToMove.OrderBy(x => Vector2.Distance(x, positionFaction) + (Vector2.Distance(x, positionThis) * 2)).ToList();
@@ -105,18 +108,37 @@ public class PlayerController : MonoBehaviour
         if (_isRepeating)
             _positionsToMove.Add(positionToMove);
     }
-
+    private IEnumerator ExplotarRecurso()
+    {
+        _stop = true;
+        while (cantidadDeRecursos < _limiteDeRecursos)
+        {
+            cantidadDeRecursos++;
+            yield return new WaitForSeconds(1f);
+            //Debug.Log("Agarre un recurso mas ahora tengo " + cantidadDeRecursos);
+        }
+        _stop = false;
+    }
     private void OnTriggerEnter(Collider other)
     {
-        if (other.gameObject.layer.Equals(LayerMask.NameToLayer("Resource")) && !_cosasEncontradas.Contains(other.gameObject))
+        if (other.gameObject.layer.Equals(LayerMask.NameToLayer("Resource")))
         {
-            //Debug.Log("Algo encontre" + other.gameObject.layer);
-            _cosasEncontradas.Add(other.gameObject);
+            if (!_cosasEncontradas.Contains(other.gameObject))
+            {
+                //Debug.Log("Algo encontre" + other.gameObject.layer);
+                _cosasEncontradas.Add(other.gameObject);
+            }else if (other.gameObject.Equals(_resourceToExploit))
+            {
+                Debug.Log("Buenas locuras aca estoy explotando un recurso");
+                StartCoroutine("ExplotarRecurso");
+            }   
         }
         if (other.gameObject.layer.Equals(LayerMask.NameToLayer("Faction")))
         {
             //Debug.Log("Volvi a base");
             OnPersonEnterFaction?.Invoke(_cosasEncontradas);
+            if (cantidadDeRecursos > 0)
+                OnPersonEnterFactionWhitResources?.Invoke(this);
         }
     }
 }
